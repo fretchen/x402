@@ -368,6 +368,22 @@ describe("BatchSettlementEvmScheme — parsePrice", () => {
     const result = await server2.parsePrice("1", NETWORK);
     expect(result.amount).toBe("1000000");
   });
+
+  it("sets assetTransferMethod from the registry for permit2 tokens priced with $ strings", async () => {
+    // Igra mainnet: permit2 without EIP-2612 — name/version omitted, assetTransferMethod set.
+    const result = await server.parsePrice("$1.00", "eip155:38833" as Network);
+    expect(result.extra?.assetTransferMethod).toBe("permit2");
+    expect(result.extra?.name).toBeUndefined();
+    expect(result.extra?.version).toBeUndefined();
+  });
+
+  it("keeps name/version for permit2 tokens that support EIP-2612", async () => {
+    // MegaETH mainnet MegaUSD: permit2 + EIP-2612 — name/version retained for gasless permit.
+    const result = await server.parsePrice("$1.00", "eip155:4326" as Network);
+    expect(result.extra?.assetTransferMethod).toBe("permit2");
+    expect(result.extra?.name).toBe("MegaUSD");
+    expect(result.extra?.version).toBe("1");
+  });
 });
 
 describe("BatchSettlementEvmScheme — enhancePaymentRequirements", () => {

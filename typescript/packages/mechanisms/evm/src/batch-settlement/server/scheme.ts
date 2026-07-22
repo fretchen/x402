@@ -429,12 +429,23 @@ export class BatchSettlementEvmScheme implements SchemeNetworkServer {
     const assetInfo = getDefaultAsset(network);
     const tokenAmount = convertToTokenAmount(numberToDecimalString(amount), assetInfo.decimals);
 
+    // EIP-3009 tokens always need name/version for their transferWithAuthorization domain.
+    // Permit2 tokens only need them if the token supports EIP-2612 (for gasless permit signing).
+    // Omitting name/version for permit2 tokens signals the client to skip EIP-2612 and use
+    // ERC-20 approval gas sponsoring instead.
+    const includeEip712Domain = !assetInfo.assetTransferMethod || assetInfo.supportsEip2612;
+
     return {
       amount: tokenAmount,
       asset: assetInfo.address,
       extra: {
-        name: assetInfo.name,
-        version: assetInfo.version,
+        ...(includeEip712Domain && {
+          name: assetInfo.name,
+          version: assetInfo.version,
+        }),
+        ...(assetInfo.assetTransferMethod && {
+          assetTransferMethod: assetInfo.assetTransferMethod,
+        }),
       },
     };
   }
