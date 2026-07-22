@@ -373,10 +373,10 @@ describe("BatchSettlementEvmScheme — parsePrice", () => {
 describe("BatchSettlementEvmScheme — enhancePaymentRequirements", () => {
   const baseReqs = makeRequirements();
 
-  it("injects withdrawDelay, facilitator receiverAuthorizer, name, version", async () => {
+  it("injects withdrawDelay, facilitator receiverAuthorizer, and passes through name/version", async () => {
     const server = new BatchSettlementEvmScheme(RECEIVER, { withdrawDelay: 1800 });
     const enhanced = await server.enhancePaymentRequirements(
-      baseReqs,
+      makeRequirements({ extra: { name: "USDC", version: "2" } }),
       {
         x402Version: 2,
         scheme: "batch-settlement",
@@ -390,6 +390,32 @@ describe("BatchSettlementEvmScheme — enhancePaymentRequirements", () => {
     expect(enhanced.extra?.receiverAuthorizer).toBe(RECEIVER_AUTHORIZER);
     expect(enhanced.extra?.name).toBe("USDC");
     expect(enhanced.extra?.version).toBe("2");
+  });
+
+  it("does not throw for a network absent from the default-asset registry when asset is explicit", async () => {
+    const server = new BatchSettlementEvmScheme(RECEIVER, { withdrawDelay: 1800 });
+    const unlistedNetwork = "eip155:10" as Network;
+    const explicitAsset = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85";
+    const enhanced = await server.enhancePaymentRequirements(
+      makeRequirements({
+        network: unlistedNetwork,
+        asset: explicitAsset,
+        extra: { name: "USD Coin", version: "2" },
+      }),
+      {
+        x402Version: 2,
+        scheme: "batch-settlement",
+        network: unlistedNetwork,
+        extra: { receiverAuthorizer: RECEIVER_AUTHORIZER },
+      },
+      [],
+    );
+
+    expect(enhanced.asset).toBe(explicitAsset);
+    expect(enhanced.extra?.name).toBe("USD Coin");
+    expect(enhanced.extra?.version).toBe("2");
+    expect(enhanced.extra?.receiverAuthorizer).toBe(RECEIVER_AUTHORIZER);
+    expect(enhanced.extra?.withdrawDelay).toBe(1800);
   });
 
   it("throws when neither server nor facilitator provides receiverAuthorizer", async () => {
@@ -458,6 +484,32 @@ describe("BatchSettlementEvmScheme — enhancePaymentRequirements", () => {
     );
 
     expect(enhanced.extra?.assetTransferMethod).toBe("permit2");
+  });
+});
+
+describe("BatchSettlementEvmScheme — createChannelManager", () => {
+  it("uses the network's default asset when no token is given", () => {
+    const server = new BatchSettlementEvmScheme(RECEIVER);
+    const manager = server.createChannelManager({} as FacilitatorClient, NETWORK);
+    expect(manager).toBeInstanceOf(BatchSettlementChannelManager);
+  });
+
+  it("throws for a network absent from the default-asset registry when no token is given", () => {
+    const server = new BatchSettlementEvmScheme(RECEIVER);
+    expect(() =>
+      server.createChannelManager({} as FacilitatorClient, "eip155:10" as Network),
+    ).toThrow(/No default asset configured/);
+  });
+
+  it("uses an explicit token for a network absent from the default-asset registry", () => {
+    const server = new BatchSettlementEvmScheme(RECEIVER);
+    const explicitToken = "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85" as `0x${string}`;
+    const manager = server.createChannelManager(
+      {} as FacilitatorClient,
+      "eip155:10" as Network,
+      explicitToken,
+    );
+    expect(manager).toBeInstanceOf(BatchSettlementChannelManager);
   });
 });
 
